@@ -37,6 +37,7 @@ Database drivers run migrations. [Add a new database?](database/driver.go)
   * [CockroachDB](database/cockroachdb)
   * [ClickHouse](database/clickhouse)
   * [Firebird](database/firebird)
+  * [Snowflake](database/snowflake)
 
 ### Database URLs
 
