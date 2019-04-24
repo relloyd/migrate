@@ -132,8 +132,8 @@ func (s *Snowflake) Run(migration io.Reader) error {
 	if err != nil {
 		return err
 	}
-	terminatorPattern := ";\n"
-	commentLinePattern := "--.*;\n"
+	terminatorPattern := ";\r{0,1}\n"
+	commentLinePattern := "--.*;\r{0,1}\n"
 	reCommentLine := regexp.MustCompile(commentLinePattern)
 	queries := regexpSplit(string(migr[:]), terminatorPattern) // split the input file into separate queries.
 	for _, query := range queries { // for each SQL statement in the input text...
