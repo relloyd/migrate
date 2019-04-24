@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	nurl "net/url"
+	"regexp"
 	"strings"
 
 	"context"
@@ -131,14 +132,21 @@ func (s *Snowflake) Run(migration io.Reader) error {
 	if err != nil {
 		return err
 	}
-
-	// run migration
-	query := string(migr[:])
-	if _, err := s.conn.ExecContext(context.Background(), query); err != nil {
-		// TODO: cast to postgress error and get line number
-		return database.Error{OrigErr: err, Err: "migration failed", Query: migr}
+	terminatorPattern := ";\n"
+	commentLinePattern := "--.*;\n"
+	reCommentLine := regexp.MustCompile(commentLinePattern)
+	queries := regexpSplit(string(migr[:]), terminatorPattern) // split the input file into separate queries.
+	for _, query := range queries { // for each SQL statement in the input text...
+		if (strings.HasPrefix(query, "--") && reCommentLine.Match([]byte(query))) ||
+			len(query) == 0	{
+			// if the query starts with a comment and is just a terminated comment
+			// OR the query is empty...
+			continue // skip this!
+		}
+		if _, err := s.conn.ExecContext(context.Background(), query); err != nil { // if execution failed...
+			return database.Error{OrigErr: err, Err: "migration failed", Query: migr}
+		}
 	}
-
 	return nil
 }
 
@@ -243,4 +251,25 @@ func (s *Snowflake) ensureVersionTable() error {
 		return &database.Error{OrigErr: err, Query: []byte(query)}
 	}
 	return nil
+}
+
+// regexpSplit splits text using the supplied regexp delimiter.
+// If there is no match then the original text is returned.
+// Each string in the returned slice includes the delimiter.
+func regexpSplit(text string, delimiterRegexp string) []string {
+	reg := regexp.MustCompile(delimiterRegexp)
+	indexes := reg.FindAllStringIndex(text, -1)
+	if indexes == nil { // if there was no match...
+		return []string{text} // return the input text in a slice.
+	}
+	lastStart := 0
+	result := make([]string, len(indexes)) // add 1 more if you want the trailing text that is not terminated.
+	for idx, element := range indexes { // for each matched index position in the text...
+		// element is an array with two values: pos 0 = start of delimiter; pos 1 = end of delimiter.
+		result[idx] = text[lastStart:element[1]] // cut from lastStart to the end of the match position (include the delimiter).
+		lastStart = element[1]                   // reset lastStart to just after the match string.
+	}
+	// Discard any trailing text that is not terminated by the delimiter.
+	// This is the last substring to the end of the text: // result[len(indexes)] = text[lastStart:]
+	return result
 }
